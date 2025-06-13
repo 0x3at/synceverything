@@ -4,22 +4,22 @@ A powerful VS Code extension that enables seamless synchronization of your VS Co
 
 ## Features
 
-- 🔄 **Profile Management**: Create, update, and manage multiple sync profiles
-- ⚡ **One-Click Sync**: Pull and apply settings with a single click
-- 🔒 **Secure Storage**: Uses GitHub Gists for secure, private storage of your settings
-- 🛠 **Comprehensive Sync**: Syncs:
-  - VS Code/Cursor Settings
-  - Installed Extensions
-  - Custom Keybindings
-- 🔍 **Smart Conflict Resolution**: Handles extension installation/uninstallation with confirmation
-- 📊 **Progress Tracking**: Visual progress indicators for sync operations
-- 📝 **Detailed Logging**: Comprehensive logging for troubleshooting
+-   🔄 **Profile Management**: Create, update, and manage multiple sync profiles
+-   ⚡ **One-Click Sync**: Pull and apply settings with a single click
+-   🔒 **Secure Storage**: Uses GitHub Gists for secure, private storage of your settings
+-   🛠 **Comprehensive Sync**: Syncs:
+    -   VS Code/Cursor Settings
+    -   Installed Extensions
+    -   Custom Keybindings
+-   🔍 **Smart Conflict Resolution**: Handles extension installation/uninstallation with confirmation
+-   📊 **Progress Tracking**: Visual progress indicators for sync operations
+-   📝 **Detailed Logging**: Comprehensive logging for troubleshooting
 
 ## Requirements
 
-- VS Code or Cursor editor (untested on windsurf)
-- GitHub account
-- GitHub authentication (handled automatically by the extension)
+-   VS Code or Cursor editor (untested on windsurf)
+-   GitHub account
+-   GitHub authentication (handled automatically by the extension)
 
 ## Installation
 
@@ -38,48 +38,54 @@ A powerful VS Code extension that enables seamless synchronization of your VS Co
 
 ### Important Notes
 
-- Comments in both `settings.json` and `keybindings.json` files cannot be preserved during sync operations
-- The extension has been tested on:
-  - Windows (VS Code and Cursor)
-  - Linux (VS Code and Cursor)
-- Untested but should work on:
-  - macOS (VS Code and Cursor)
-  - Windsurf (requires manual configuration of settings path)
+-   Comments in both `settings.json` and `keybindings.json` files cannot be preserved during sync operations
+-   The extension has been tested on:
+    -   Windows (VS Code and Cursor)
+    -   Linux (VS Code and Cursor)
+-   Untested but should work on:
+    -   macOS (VS Code and Cursor)
+    -   Windsurf (requires manual configuration of settings path)
 
 ### Commands
 
 Access all commands through the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
 
-- `Sync Everything: Show Menu` - Opens the main menu
-- `Sync Everything: Create Profile` - Create a new sync profile
-- `Sync Everything: Pull Profile` - Pull and apply a profile
-- `Sync Everything: Update Profile` - Update an existing profile
-- `Sync Everything: Delete Profile` - Delete a profile
-- `Sync Everything: Show Logs` - View detailed operation logs
+-   `Sync Everything: Show Menu` - Opens the main menu
+    -   `Sync Everything: Create Profile` - Create a new sync profile
+    -   `Sync Everything: Pull Profile` - Pull and apply a profile
+    -   `Sync Everything: Update Profile` - Update an existing profile
+    -   `Sync Everything: Delete Profile` - Delete a profile
+    -   `Sync Everything: Show Logs` - View detailed operation logs
+    -   `Sync Everything: Set Paths Manually` - Select custom paths for your settings and keybindings
 
 ### Extension Settings
 
 This extension contributes the following settings:
 
-* `synceverything.customSettingsPath`: Custom path for settings.json
-* `synceverything.customKeybindingsPath`: Custom path for keybindings.json
-* `synceverything.confirmBeforeSync`: Enable/disable confirmation before syncing extensions
+-   `synceverything.confirmBeforeSync`: Enable/disable confirmation before syncing extensions
+-   ~~`synceverything.customSettingsPath`: Custom path for settings.json~~ **(Deprecated in beta 0.2)**
+-   ~~`synceverything.customKeybindingsPath`: Custom path for keybindings.json~~ **(Deprecated in beta 0.2)**
 
 ## Known Issues
 
-- None reported yet
+-   None Currently, please report issues as found
 
 ## Release Notes
 
+### 0.2.0 (Beta)
+
+-   Deprecated Manual Paths Settings as the interface for setting custom paths
+-   Added a `Set Manual Paths` option to the `Show Menu` command to replace the deprecated settings
+
 ### 0.1.0 (Beta)
 
-- Initial beta release
-- Core sync functionality
-- GitHub Gist integration
-- Profile management
-- Extension sync with confirmation
-- Settings and keybindings sync
-- Progress tracking and logging
+-   Initial beta release
+-   Core sync functionality
+-   GitHub Gist integration
+-   Profile management
+-   Extension sync with confirmation
+-   Settings and keybindings sync
+-   Progress tracking and logging
 
 ## Contributing
 

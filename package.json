@@ -2,14 +2,14 @@
 	"name": "sync-everything",
 	"displayName": "Sync Everything",
 	"description": "Sync your VS Code/Cursor settings, extensions, and keybindings across devices using GitHub Gists",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"qna": "marketplace",
 	"publisher": "DunderDev",
 	"icon": "./images/logo.png",
 	"engines": {
 		"vscode": "^1.90.0"
 	},
-	"repository": "",
+	"repository": "https://github.com/0x3at/synceverything",
 	"categories": [
 		"Programming Languages",
 		"Themes",
@@ -68,21 +68,17 @@
 				"title": "Show Logs",
 				"category": "Sync Everything",
 				"icon": "$(output)"
+			},
+			{
+				"command": "synceverything.setpathsmanually",
+				"title": "Manually Set Paths",
+				"category": "Sync Everything",
+				"icon": "$(file-symlink-directory)"
 			}
 		],
 		"configuration": {
 			"title": "Sync Everything",
 			"properties": {
-				"synceverything.customSettingsPath": {
-					"type": "string",
-					"default": "",
-					"description": "Custom path to settings.json file"
-				},
-				"synceverything.customKeybindingsPath": {
-					"type": "string",
-					"default": "",
-					"description": "Custom path to keybindings.json file"
-				},
 				"synceverything.confirmBeforeSync": {
 					"type": "boolean",
 					"default": true,

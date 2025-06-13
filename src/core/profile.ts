@@ -1,6 +1,14 @@
 import { readFile } from 'fs/promises';
 import JSON5 from 'json5';
-import { commands, Extension, extensions, ProgressLocation, Uri, window, workspace } from 'vscode';
+import {
+	commands,
+	Extension,
+	extensions,
+	ProgressLocation,
+	Uri,
+	window,
+	workspace
+} from 'vscode';
 
 import { appName, extConfig, IContextStore, logger } from '../extension';
 import { ISettings } from '../models/interfaces';
@@ -63,64 +71,55 @@ export const setKeybindings = async (
 	}
 };
 
+export const setManualPath = async (
+	ctx: IContextStore<String>,
+	t: 'keybindings' | 'settings'
+) => {
+	let path;
+	if (!path) {
+		const manualPath = await window.showOpenDialog({
+			canSelectFiles: true,
+			canSelectFolders: false,
+			canSelectMany: false,
+			filters: { 'JSON files': ['json'] },
+			title: `Select ${t}.json file`
+		});
+
+		if (!manualPath || manualPath.length === 0) {
+			let message = `${t} file is required but not found`;
+			logger.error(message, true);
+			return;
+		}
+		path = manualPath[0].fsPath;
+		logger.info(`Storing ${t} path as: ${path}`);
+		ctx.set(path);
+	}
+};
+
 export const validatePaths = async (
 	settingsPath: IContextStore<string>,
 	keybindingsPath: IContextStore<string>
 ): Promise<boolean> => {
-	const customSettingsPath = extConfig.get<string>('customSettingsPath');
-	const customKeybindingsPath = extConfig.get<string>(
-		'customKeybindingsPath'
-	);
-
 	if (settingsPath.missing() || !settingsPath.get()) {
-		let path = customSettingsPath;
+		let path;
 		if (!path) {
 			path = await findConfigFile(appName, 'settings.json');
 		}
-
 		if (!path) {
-			const manualPath = await window.showOpenDialog({
-				canSelectFiles: true,
-				canSelectFolders: false,
-				canSelectMany: false,
-				filters: { 'JSON files': ['json'] },
-				title: 'Select settings.json file'
-			});
-
-			if (!manualPath || manualPath.length === 0) {
-				logger.error('Settings file is required but not found');
-				return false;
-			}
-			path = manualPath[0].fsPath;
+			await setManualPath(settingsPath, 'settings');
 		}
-
-		settingsPath.set(path);
 	}
 
 	// Keybindings path
 	if (keybindingsPath.missing() || !keybindingsPath.get()) {
-		let path = customKeybindingsPath;
+		let path;
 		if (!path) {
 			path = await findConfigFile(appName, 'keybindings.json');
 		}
 
 		if (!path) {
-			const manualPath = await window.showOpenDialog({
-				canSelectFiles: true,
-				canSelectFolders: false,
-				canSelectMany: false,
-				filters: { 'JSON files': ['json'] },
-				title: 'Select keybindings.json file'
-			});
-
-			if (!manualPath || manualPath.length === 0) {
-				logger.error('Keybindings file is required but not found');
-				return false;
-			}
-			path = manualPath[0].fsPath;
+			await setManualPath(keybindingsPath, 'keybindings');
 		}
-
-		keybindingsPath.set(path);
 	}
 
 	return true;
