@@ -11,7 +11,9 @@ import {
 } from './core/gist';
 import Logger from './core/logger';
 import {
+	filterProfile,
 	getExtensions,
+	getIgnoreList,
 	getKeybindings,
 	getSettings,
 	setExtensions,
@@ -20,7 +22,9 @@ import {
 	setSettings,
 	validatePaths
 } from './core/profile';
-import { IGist, IProfile } from './models/interfaces';
+import { createConfigView } from './core/view';
+import { IGist, IIgnored, IIgnoreList, IProfile } from './models/interfaces';
+import { createIgnoreList, ignoreListExists } from './utils';
 
 export interface IContextStore<T> {
 	missing(): boolean;
@@ -29,10 +33,10 @@ export interface IContextStore<T> {
 	clear(): void;
 }
 export let logger: Logger;
+export let configView: vscode.WebviewPanel | undefined = undefined;
 let statusBarItem: vscode.StatusBarItem;
 export const appName = vscode.env.appName.includes('Code') ? 'Code' : 'Cursor';
 export const extConfig = vscode.workspace.getConfiguration('synceverything');
-
 export async function activate(ctx: vscode.ExtensionContext) {
 	try {
 		logger = new Logger();
@@ -48,6 +52,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 		};
 
 		// Value Stores
+		logger.info('Initializing context stores');
 		const masterId: IContextStore<string> =
 			contextStore<string>('masterId');
 		const settingsPath: IContextStore<string> =
@@ -55,50 +60,134 @@ export async function activate(ctx: vscode.ExtensionContext) {
 		const keybindingsPath: IContextStore<string> =
 			contextStore<string>('keybindingsPath');
 
+		// Added in beta v0.3.0
+		// Storing the path inside of the context store so we dont have to
+		// start passing extension context all over the place
+		logger.info('Initializing Ignore List Dependencies');
+		const ignoreListPath: IContextStore<string> =
+			contextStore<string>('ignoreList');
+		ignoreListPath.set(
+			`${vscode.Uri.joinPath(ctx.globalStorageUri, 'ignore.json').fsPath}`
+		);
+
+		const initializeIgnoreList = () => {
+			const list = async (): Promise<IIgnoreList> =>
+				await getIgnoreList(ignoreListPath.get()!);
+			return {
+				settings: async () => {
+					return (await list()).settings;
+				},
+				keybindings: async () => {
+					return (await list()).keybindings;
+				},
+				extensions: async () => {
+					return (await list()).extensions;
+				},
+				update: async (
+					settings: string[],
+					exts: string[],
+					keybindings: { key: string; command: string }[]
+				) => {
+					const ignoreList: IIgnoreList = {
+						settings,
+						extensions: exts,
+						keybindings
+					};
+					const ignoreListFilePath = ignoreListPath.get();
+					if (!ignoreListFilePath) {
+						logger.error('Ignore list file path is not set.');
+						return;
+					}
+					try {
+						await vscode.workspace.fs.writeFile(
+							vscode.Uri.file(ignoreListFilePath),
+							Buffer.from(JSON.stringify(ignoreList, null, 2))
+						);
+						logger.info('Ignore list updated successfully.');
+					} catch (error) {
+						logger.error('Failed to update ignore list', error);
+					}
+				}
+			};
+		};
+
+		const ignored: IIgnored = initializeIgnoreList();
+		// Initialize Ignore List
+		logger.info('Checking Ignore List status');
+		if (!ignoreListExists(ctx)) {
+			logger.info('Ignore List not found, generating new template');
+			await createIgnoreList(ctx);
+			logger.info('Successfully created new Ignore List');
+		} else {
+			logger.info('Found existing Ignore List');
+		}
+
 		// Master gist initialization
 		const initializeMasterGist = async () => {
 			if (masterId.missing() || !masterId.get()) {
-				logger.info('Initializing master gist...');
+				logger.info(
+					'Master gist ID has not been captured, searching for existing master'
+				);
 				const master: IGist | undefined = await getMasterList();
 				if (master) {
 					masterId.set(master.id);
-					logger.info(`Found existing master gist: ${master.id}`);
+					logger.info(
+						`Found existing master gist with ID: ${master.id}`
+					);
 				} else {
-					logger.info('Creating new master gist...');
-					const profile: IProfile = {
-						profileName: 'Genesis',
-						settings: await getSettings(
-							settingsPath.get() as string
-						),
-						extensions: getExtensions(),
-						keybindings: await getKeybindings(
-							keybindingsPath.get() as string
-						)
-					};
+					logger.info(
+						'No existing master gist found, creating Genisis profile'
+					);
+
+					const profile: IProfile = await filterProfile(
+						{
+							profileName: 'Genesis',
+							settings: await getSettings(
+								settingsPath.get() as string
+							),
+							extensions: getExtensions(),
+							keybindings: await getKeybindings(
+								keybindingsPath.get() as string
+							)
+						},
+						ignored
+					);
 					const gist = await createMasterGist(profile);
 					masterId.set(gist.id);
-					logger.info(`Created new master gist: ${gist.id}`);
+					logger.info(
+						`Successfully created new master gist with ID: ${gist.id}`
+					);
 				}
+			} else {
+				logger.info(
+					`Using existing master gist with ID: ${masterId.get()}`
+				);
 			}
 		};
 
 		// Initialize extension
 		const initializeExtension = async (): Promise<boolean> => {
 			try {
-				logger.info('Starting extension initialization...');
+				logger.info('Beginning extension initialization sequence');
 
 				// Validate and initialize paths
+				logger.info('Validating configuration file paths');
 				if (!(await validatePaths(settingsPath, keybindingsPath))) {
+					logger.error(
+						'Required configuration files not found during path validation'
+					);
 					throw new Error('Required configuration files not found');
 				}
+				logger.info('Configuration file paths validated successfully');
 
 				// Initialize or find master gist
+				logger.info('Initializing Remote Profile List');
 				await initializeMasterGist();
 
-				logger.info('Extension initialized successfully');
+				logger.info('Extension initialization completed successfully');
 				return true;
 			} catch (error) {
-				logger.error('Failed to initialize extension', error);
+				logger.error('Extension initialization failed', error);
 
 				const retry = await vscode.window.showErrorMessage(
 					'Sync Everything failed to initialize. Would you like to retry?',
@@ -108,8 +197,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
 				);
 
 				if (retry === 'Retry') {
+					logger.info('User chose to retry initialization');
 					return await initializeExtension();
 				} else if (retry === 'Show Logs') {
+					logger.info('User requested to view logs');
 					logger.show();
 				}
 
@@ -122,6 +213,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			'synceverything.createprofile',
 			async () => {
 				try {
+					logger.info('Starting profile creation process');
 					const profileName = await vscode.window.showInputBox({
 						prompt: 'Enter profile name',
 						validateInput: (value) => {
@@ -136,8 +228,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
 					});
 
 					if (!profileName) {
+						logger.error(
+							'Profile creation cancelled: No profile name provided'
+						);
 						return;
 					}
+
+					logger.info(`Creating new profile: "${profileName}"`);
 
 					await vscode.window.withProgress(
 						{
@@ -147,23 +244,27 @@ export async function activate(ctx: vscode.ExtensionContext) {
 						},
 						async (progress) => {
 							progress.report({
-								message: 'Reading current settings...'
+								message: 'Reading local profile...'
 							});
 
-							const profile: IProfile = {
-								profileName,
-								settings: await getSettings(
-									settingsPath.get() as string
-								),
-								extensions: getExtensions(),
-								keybindings: await getKeybindings(
-									keybindingsPath.get() as string
-								)
-							};
+							const profile: IProfile = await filterProfile(
+								{
+									profileName,
+									settings: await getSettings(
+										settingsPath.get() as string
+									),
+									extensions: getExtensions(),
+									keybindings: await getKeybindings(
+										keybindingsPath.get() as string
+									)
+								},
+								ignored
+							);
 
 							progress.report({
 								message: 'Uploading to GitHub...'
 							});
+
 							await createProfile(
 								masterId.get() as string,
 								profile
@@ -185,15 +286,24 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			'synceverything.pullprofile',
 			async () => {
 				try {
+					logger.info('Starting profile pull process');
 					const masterGist = await getGist(masterId.get() as string);
 					const profileNames = Object.keys(masterGist.files);
 
 					if (profileNames.length === 0) {
+						logger.error('No profiles found in master gist', {
+							masterGistId: masterGist.id,
+							files: masterGist.files
+						});
 						vscode.window.showInformationMessage(
 							'No profiles found'
 						);
 						return;
 					}
+
+					logger.info(
+						`Found ${profileNames.length} available profiles`
+					);
 
 					const selectedProfile = await vscode.window.showQuickPick(
 						profileNames.map((name) => ({
@@ -204,6 +314,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
 					);
 
 					if (!selectedProfile) {
+						logger.error(
+							'No profile selected during quick pick selection'
+						);
 						return;
 					}
 
@@ -214,6 +327,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 					);
 
 					if (confirmPull !== 'Yes') {
+						logger.info('Profile Pull Canceled');
 						return;
 					}
 
@@ -224,18 +338,24 @@ export async function activate(ctx: vscode.ExtensionContext) {
 							cancellable: false
 						},
 						async (progress) => {
+							progress.report({
+								message: 'Loading Profile Reference...'
+							});
 							const profileFile =
 								masterGist.files[
 									`${selectedProfile.label}.json`
 								];
-							const profile = await getRawProfile(
-								profileFile.raw_url
+							const profile = await filterProfile(
+								await getRawProfile(profileFile.raw_url),
+								ignored,
+								true
 							);
 
 							progress.report({
 								message: 'Updating settings...',
 								increment: 25
 							});
+
 							await setSettings(
 								settingsPath.get() as string,
 								profile.settings
@@ -245,19 +365,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
 								message: 'Syncing extensions...',
 								increment: 50
 							});
-							await setExtensions(profile.extensions);
+							await setExtensions(profile.extensions, ignored);
 
 							progress.report({
 								message: 'Updating keybindings...',
 								increment: 75
 							});
+
 							await setKeybindings(
 								keybindingsPath.get() as string,
 								profile.keybindings
 							);
 
 							progress.report({
-								message: 'Complete!',
+								message: 'Sync Complete!',
 								increment: 100
 							});
 						}
@@ -271,6 +392,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 					);
 
 					if (reload === 'Reload Now') {
+						logger.info('Initiating Window Reload...');
 						await vscode.commands.executeCommand(
 							'workbench.action.reloadWindow'
 						);
@@ -285,15 +407,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			'synceverything.updateprofile',
 			async () => {
 				try {
+					logger.info('Starting profile update process');
 					const masterGist = await getGist(masterId.get() as string);
 					const profileNames = Object.keys(masterGist.files);
 
 					if (profileNames.length === 0) {
+						logger.error(
+							'No profiles found to update in master gist'
+						);
 						vscode.window.showInformationMessage(
 							'No profiles found to update'
 						);
 						return;
 					}
+
+					logger.info(
+						`Found ${profileNames.length} profiles available for update`
+					);
 
 					const selectedProfile = await vscode.window.showQuickPick(
 						profileNames.map((name) => ({
@@ -332,16 +462,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
 								message: 'Reading current configuration...'
 							});
 
-							const updatedProfile: IProfile = {
-								profileName: selectedProfile.label,
-								settings: await getSettings(
-									settingsPath.get() as string
-								),
-								extensions: getExtensions(),
-								keybindings: await getKeybindings(
-									keybindingsPath.get() as string
-								)
-							};
+							const updatedProfile: IProfile =
+								await filterProfile(
+									{
+										profileName: selectedProfile.label,
+										settings: await getSettings(
+											settingsPath.get() as string
+										),
+										extensions: getExtensions(),
+										keybindings: await getKeybindings(
+											keybindingsPath.get() as string
+										)
+									},
+									ignored
+								);
 
 							progress.report({
 								message: 'Uploading to GitHub...'
@@ -369,15 +503,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			'synceverything.deleteprofile',
 			async () => {
 				try {
+					logger.info('Starting profile deletion process');
 					const masterGist = await getGist(masterId.get() as string);
 					const profileNames = Object.keys(masterGist.files);
 
 					if (profileNames.length === 0) {
+						logger.error(
+							'No profiles found to delete in master gist'
+						);
 						vscode.window.showInformationMessage(
 							'No profiles found to delete'
 						);
 						return;
 					}
+
+					logger.info(
+						`Found ${profileNames.length} profiles available for deletion`
+					);
 
 					const selectedProfile = await vscode.window.showQuickPick(
 						profileNames.map((name) => ({
@@ -418,7 +560,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
 								extensions: [],
 								keybindings: []
 							};
-
 							await deleteProfile(
 								masterId.get() as string,
 								profileToDelete
@@ -426,9 +567,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
 							logger.info(
 								`Deleted profile: ${selectedProfile.label}`
 							);
-							vscode.window.showInformationMessage(
-								`Profile "${selectedProfile.label}" deleted successfully!`
-							);
+							progress.report({
+								message: `Profile "${selectedProfile.label}" deleted successfully!`
+							});
 						}
 					);
 				} catch (error) {
@@ -476,6 +617,64 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			}
 		);
 
+		const OpenConfigurationView = vscode.commands.registerCommand(
+			`synceverything.showconfigview`,
+			async () => {
+				if (configView) {
+					configView.reveal(vscode.ViewColumn.Active);
+				} else {
+					const localState = {
+						settings: await getSettings(
+							settingsPath.get() as string
+						),
+						extensions: vscode.extensions.all
+							.filter(
+								(ext: vscode.Extension<any>) =>
+									!ext.packageJSON.isBuiltin
+							)
+							.map((ext: vscode.Extension<any>) => {
+								return {
+									name: ext.packageJSON.displayName || ext.id,
+									id: ext.id
+								};
+							}),
+						keybindings: await getKeybindings(
+							keybindingsPath.get() as string
+						)
+					};
+					logger.info(JSON.stringify(localState.extensions));
+					const viewController = createConfigView(
+						localState.settings,
+						localState.extensions,
+						localState.keybindings,
+						await ignored.settings(),
+						await ignored.extensions(),
+						await ignored.keybindings()
+					);
+					configView = viewController.panel();
+					configView.webview.html = viewController.html;
+					configView.webview.onDidReceiveMessage((message) => {
+						logger.info(
+							`Message Recieved from Webview ${JSON.stringify(
+								message
+							)}`
+						);
+						switch (message.command) {
+							case 'save':
+								ignored.update(
+									message.data.settings,
+									message.data.extensions,
+									message.data.keybindings
+								);
+						}
+					});
+
+					configView.onDidDispose(() => (configView = undefined));
+					ctx.subscriptions.push(configView);
+				}
+			}
+		);
+
 		const SetManualPath = vscode.commands.registerCommand(
 			'synceverything.setpathsmanually',
 			async () => {
@@ -485,7 +684,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 						method: [setManualPath, settingsPath, 'settings']
 					},
 					{
-						label: '$(keyboard) Pull Profile',
+						label: '$(keyboard) Set Keybindings Path',
 						method: [setManualPath, keybindingsPath, 'keybindings']
 					}
 				];
@@ -510,17 +709,26 @@ export async function activate(ctx: vscode.ExtensionContext) {
 			}
 		);
 
-		// Status bar setup
-		statusBarItem = vscode.window.createStatusBarItem(
-			vscode.StatusBarAlignment.Right,
-			100
-		);
-		statusBarItem.text = '$(sync~spin) Sync';
-		statusBarItem.tooltip = 'Sync Everything: Click to see profiles';
-		statusBarItem.command = 'synceverything.showmenu';
-		statusBarItem.show();
+		// Setup Optional Status Bar Item
+		if (extConfig.get('showSyncMenuShortcut', true)) {
+			logger.info('Creating status bar item');
+			statusBarItem = vscode.window.createStatusBarItem(
+				vscode.StatusBarAlignment.Right,
+				100
+			);
+			statusBarItem.text = '$(sync~spin) Sync';
+			statusBarItem.tooltip = 'Sync Everything: Click to see profiles';
+			statusBarItem.command = 'synceverything.showmenu';
+			statusBarItem.show();
+			logger.info('Status bar item created successfully');
+		} else {
+			logger.info(
+				'Status bar item creation skipped based on configuration'
+			);
+		}
 
 		// Initialize the extension
+		logger.info('Starting final extension initialization');
 		const initialized = await initializeExtension();
 		if (!initialized) {
 			logger.error('Extension failed to initialize properly');
@@ -528,7 +736,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
 		}
 
 		// Register all commands
+		logger.info('Registering extension commands');
 		ctx.subscriptions.push(
+			OpenConfigurationView,
 			CreateProfile,
 			PullProfile,
 			UpdateProfile,
@@ -543,12 +753,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Sync Everything is now active!');
 		logger.info('Extension activation completed successfully');
 	} catch (error) {
+		logger.error('Critical error during extension activation', error);
 		vscode.window.showErrorMessage(`${error}`);
 	}
 }
 
 export function deactivate() {
-	logger?.info('Extension deactivated');
+	logger?.info('Extension deactivation started');
 	statusBarItem?.dispose();
 	logger?.dispose();
+	logger?.info('Extension deactivation completed');
 }

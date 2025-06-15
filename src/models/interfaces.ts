@@ -67,7 +67,22 @@ export interface IProfile {
 export interface ISettings {
 	[key: string]: any;
 }
+export interface IIgnored {
+	settings: () => Promise<string[]>;
+	keybindings: () => Promise<{ key: string; command: string }[]>;
+	extensions: () => Promise<string[]>;
+	update: (
+		settings: string[],
+		extensions: string[],
+		keybindings: { key: string; command: string }[]
+	) => Promise<void>;
+}
 
+export interface IIgnoreList {
+	settings: string[];
+	keybindings: { key: string; command: string }[];
+	extensions: string[];
+}
 export interface IGistCreateRequest {
 	description: string;
 	files: {

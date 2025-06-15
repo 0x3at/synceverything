@@ -11,13 +11,85 @@ import {
 } from 'vscode';
 
 import { appName, extConfig, IContextStore, logger } from '../extension';
-import { ISettings } from '../models/interfaces';
+import {
+	IIgnored,
+	IIgnoreList,
+	IProfile,
+	ISettings
+} from '../models/interfaces';
 import { findConfigFile } from '../utils';
+
+export const getIgnoreList = async (path: string): Promise<IIgnoreList> => {
+	try {
+		const buffer = await readFile(path, 'utf-8');
+		return JSON.parse(buffer) as IIgnoreList;
+	} catch (error) {
+		logger.error(`Failed to read ignore list`, error);
+		throw error;
+	}
+};
+
+export const filterProfile = async (
+	profile: IProfile,
+	ignored: IIgnored,
+	pull: Boolean = false
+): Promise<IProfile> => {
+	logger.info('Applying Profile Filters');
+	const [ignoredSettings, ignoredKeybindings, ignoredExtensions] =
+		await Promise.all([
+			ignored.settings(),
+			ignored.keybindings(),
+			ignored.extensions()
+		]);
+
+	// Settings are always ignored, for both sync directions
+	if (ignoredSettings.length > 0) {
+		logger.info(`Filtering ${ignoredSettings.length} Ignored Settings...`);
+		// Filter Out Identical Keys
+		profile.settings = Object.fromEntries(
+			Object.entries(profile.settings).filter(
+				([key]) => !ignoredSettings.includes(key)
+			)
+		);
+		// TODO: Filter Nested Keys
+	}
+
+	if (pull) {
+		logger.info(
+			'Using pull strategy to filter, protecting local keybindings and extensions'
+		);
+		// Keybinds are only ignored for pull operations, not push operations
+		if (ignoredKeybindings.length > 0) {
+			logger.info(
+				`Filtering ${ignoredKeybindings.length} Ignored Keybinds...`
+			);
+			profile.keybindings = profile.keybindings.filter(
+				(k) => !ignoredKeybindings.includes(k)
+			);
+		}
+
+		// Extensions are only ignored for pull operations, not push operations
+		if (ignoredExtensions.length > 0) {
+			logger.info(
+				`Filtering ${ignoredExtensions.length} Ignored Extensions...`
+			);
+			profile.extensions = profile.extensions.filter(
+				(e) => !ignoredExtensions.includes(e)
+			);
+		}
+	} else {
+		logger.info(
+			'Using push strategy to filter, keybindings and extensions were pueshed to remote profile'
+		);
+	}
+
+	return profile;
+};
 
 export const getSettings = async (path: string): Promise<ISettings> => {
 	try {
 		const buffer = await readFile(path, 'utf-8');
-		return JSON5.parse(buffer);
+		return JSON5.parse(buffer) as ISettings;
 	} catch (error) {
 		logger.error(`Failed to read settings file: ${path}`, error);
 		throw error;
@@ -133,13 +205,16 @@ export const getExtensions = (): string[] => {
 		.filter((id) => !excludeList.includes(id));
 };
 
-export const setExtensions = async (remoteList: string[]) => {
+export const setExtensions = async (remoteList: string[], ignored: any) => {
 	const localList = getExtensions();
 	const localSet = new Set(localList);
 	const remoteSet = new Set(remoteList);
 
 	const toInstall = remoteList.filter((id) => !localSet.has(id));
-	const toDelete = localList.filter((id) => !remoteSet.has(id));
+	const toDelete = localList.filter(
+		(id) =>
+			!remoteSet.has(id) && !(ignored.extensions as string[]).includes(id)
+	);
 
 	if (toInstall.length === 0 && toDelete.length === 0) {
 		window.showInformationMessage('Extensions are already in sync');

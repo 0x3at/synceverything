@@ -1,7 +1,10 @@
 import * as os from 'os';
-import { Uri, workspace } from 'vscode';
+import { ExtensionContext, Uri, workspace } from 'vscode';
 
 import { logger } from './extension';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import { IIgnoreList } from './models/interfaces';
 
 const getConfigPaths = (appName: string, file: string): string[] => {
 	switch (os.platform()) {
@@ -43,3 +46,29 @@ export const findConfigFile = async (
 	logger.warn(`Could not find ${file} in any default location`);
 	return undefined;
 };
+
+export const createIgnoreList = async (
+	ctx: ExtensionContext
+): Promise<void> => {
+	const dir = ctx.globalStorageUri;
+	if (!existsSync(dir.fsPath)) {
+		await workspace.fs.createDirectory(dir);
+	}
+	return await workspace.fs.writeFile(
+		Uri.joinPath(ctx.globalStorageUri, 'ignore.json'),
+		Buffer.from(
+			JSON.stringify({
+				settings: [
+					'terminal.external.linuxExec',
+					'terminal.external.osxExec',
+					'terminal.external.windowsExec'
+				],
+				keybindings: [],
+				extensions: []
+			} as IIgnoreList)
+		)
+	);
+};
+
+export const ignoreListExists = (ctx: ExtensionContext) =>
+	existsSync(Uri.joinPath(ctx.globalStorageUri, 'ignore.json').fsPath);

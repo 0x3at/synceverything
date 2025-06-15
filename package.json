@@ -2,7 +2,7 @@
 	"name": "sync-everything",
 	"displayName": "Sync Everything",
 	"description": "Sync your VS Code/Cursor settings, extensions, and keybindings across devices using GitHub Gists",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"qna": "marketplace",
 	"publisher": "DunderDev",
 	"icon": "./images/logo.png",
@@ -74,6 +74,12 @@
 				"title": "Manually Set Paths",
 				"category": "Sync Everything",
 				"icon": "$(file-symlink-directory)"
+			},
+			{
+				"command": "synceverything.showconfigview",
+				"title": "Open Configuration View",
+				"category": "Sync Everything",
+				"icon": "$(window)"
 			}
 		],
 		"configuration": {
@@ -83,6 +89,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Show confirmation dialog before syncing"
+				},
+				"synceverything.showSyncMenuShortcut": {
+					"type": "boolean",
+					"default": true,
+					"description": "Display a sync menu shortcut in the status bar"
 				}
 			}
 		},

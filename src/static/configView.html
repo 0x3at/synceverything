@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Everything Settings</title>
+    <style>
+        /* VS Code theme integration - uses CSS variables that match VS Code's color scheme */
+        :root {
+            --vscode-foreground: var(--vscode-editor-foreground);
+            --vscode-background: var(--vscode-editor-background);
+            --vscode-input-background: var(--vscode-input-background);
+            --vscode-input-border: var(--vscode-input-border);
+            --vscode-button-background: var(--vscode-button-background);
+            --vscode-button-foreground: var(--vscode-button-foreground);
+            --vscode-list-hoverBackground: var(--vscode-list-hoverBackground);
+            --vscode-badge-background: var(--vscode-badge-background);
+            --vscode-badge-foreground: var(--vscode-badge-foreground);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            background-color: var(--vscode-background);
+            color: var(--vscode-foreground);
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--vscode-input-border);
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--vscode-descriptionForeground);
+            font-size: 14px;
+        }
+
+        /* Tab navigation for different sync categories */
+        .tab-container {
+            margin-bottom: 30px;
+        }
+
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid var(--vscode-input-border);
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 12px 20px;
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .tab-button.active {
+            border-bottom-color: var(--vscode-focusBorder);
+            color: var(--vscode-focusBorder);
+        }
+
+        .tab-button:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Search and filter controls */
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-container {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            color: var(--vscode-foreground);
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn.active {
+            background-color: var(--vscode-focusBorder);
+            color: var(--vscode-background);
+            border-color: var(--vscode-focusBorder);
+        }
+
+        /* Item lists - unified styling for all tabs */
+        .items-container {
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--vscode-input-border);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .item.ignored {
+            background-color: var(--vscode-list-warningBackground);
+            opacity: 0.7;
+        }
+
+        .item-checkbox {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .item-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            border-radius: 3px;
+            background-color: var(--vscode-button-background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--vscode-button-foreground);
+            flex-shrink: 0;
+        }
+
+        .item-details {
+            flex: 1;
+            min-width: 0; /* Allows text to truncate */
+        }
+
+        .item-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .item-description {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            font-family: 'Consolas', 'Monaco', monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .item-status {
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .status-badge {
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .status-badge.synced {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        .status-badge.ignored {
+            background-color: var(--vscode-errorBackground);
+            color: var(--vscode-errorForeground);
+        }
+
+        /* Summary stats */
+        .summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .summary-count {
+            font-weight: 600;
+            color: var(--vscode-focusBorder);
+        }
+
+        /* Action buttons at bottom */
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--vscode-input-border);
+        }
+
+        .bulk-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-button {
+            padding: 8px 16px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s ease;
+        }
+
+        .action-button.primary {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
+        }
+
+        .action-button.secondary {
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-focusBorder);
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .action-button:hover {
+            opacity: 0.8;
+        }
+
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--vscode-descriptionForeground);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sync Everything Configuration</h1>
+            <p>Control which settings, extensions, and keybindings are synchronized across your devices</p>
+        </div>
+
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="settings">Settings</button>
+                <button class="tab-button" data-tab="extensions">Extensions</button>
+                <button class="tab-button" data-tab="keybindings">Keybindings</button>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content active" id="settings-tab">
+                <div class="summary" id="settings-summary">
+                    <div class="summary-item">
+                        <span>Total Settings:</span>
+                        <span class="summary-count" id="settings-total">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Synced:</span>
+                        <span class="summary-count" id="settings-synced">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Ignored:</span>
+                        <span class="summary-count" id="settings-ignored">0</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="search-container">
+                        <input type="text" class="search-input" id="settings-search" placeholder="Search settings by key or value...">
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="synced">Synced</button>
+                        <button class="filter-btn" data-filter="ignored">Ignored</button>
+                    </div>
+                </div>
+
+                <div class="items-container" id="settings-container">
+                    <div class="loading">Loading settings...</div>
+                </div>
+            </div>
+
+            <!-- Extensions Tab -->
+            <div class="tab-content" id="extensions-tab">
+                <div class="summary" id="extensions-summary">
+                    <div class="summary-item">
+                        <span>Total Extensions:</span>
+                        <span class="summary-count" id="extensions-total">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Synced:</span>
+                        <span class="summary-count" id="extensions-synced">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Protected:</span>
+                        <span class="summary-count" id="extensions-ignored">0</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="search-container">
+                        <input type="text" class="search-input" id="extensions-search" placeholder="Search extensions by name or ID...">
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="synced">Synced</button>
+                        <button class="filter-btn" data-filter="ignored">Protected</button>
+                    </div>
+                </div>
+
+                <div class="items-container" id="extensions-container">
+                    <div class="loading">Loading extensions...</div>
+                </div>
+            </div>
+
+            <!-- Keybindings Tab -->
+            <div class="tab-content" id="keybindings-tab">
+                <div class="summary" id="keybindings-summary">
+                    <div class="summary-item">
+                        <span>Total Keybindings:</span>
+                        <span class="summary-count" id="keybindings-total">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Synced:</span>
+                        <span class="summary-count" id="keybindings-synced">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span>Priority:</span>
+                        <span class="summary-count" id="keybindings-ignored">0</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="search-container">
+                        <input type="text" class="search-input" id="keybindings-search" placeholder="Search keybindings by command or key...">
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="synced">Synced</button>
+                        <button class="filter-btn" data-filter="ignored">Priority</button>
+                    </div>
+                </div>
+
+                <div class="items-container" id="keybindings-container">
+                    <div class="loading">Loading keybindings...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <div class="bulk-actions">
+                <button class="action-button secondary" onclick="selectAll()">Select All Visible</button>
+                <button class="action-button secondary" onclick="selectNone()">Clear Selection</button>
+                <button class="action-button secondary" onclick="toggleSelected()">Toggle Selected</button>
+            </div>
+            <div>
+                <button class="action-button" onclick="resetToDefaults()">Reset</button>
+                <button class="action-button" onclick="cancelChanges()">Cancel</button>
+                <button class="action-button primary" onclick="saveConfiguration()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global data storage for all configuration items and their ignore states
+        let configData = {
+            settings: [],
+            extensions: [],
+            keybindings: [],
+            settingsIgnored: [],
+            extensionsIgnored: [],
+            keybindingsIgnored: []
+        };
+
+        // Current filter and search states for each tab
+        let filterStates = {
+            settings: { search: '', filter: 'all' },
+            extensions: { search: '', filter: 'all' },
+            keybindings: { search: '', filter: 'all' }
+        };
+
+        // Initialize the interface when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setupTabSwitching();
+            setupSearchAndFilter();
+            
+            // Request initial data from VS Code extension
+            requestInitialData();
+        });
+
+        // Sets up the tab switching functionality across the three main sections
+        function setupTabSwitching() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Remove active class from all tabs and contents
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+
+                    // Activate clicked tab and corresponding content
+                    button.classList.add('active');
+                    const targetTab = button.getAttribute('data-tab');
+                    document.getElementById(targetTab + '-tab').classList.add('active');
+                });
+            });
+        }
+
+        // Configures search inputs and filter buttons for all tabs
+        function setupSearchAndFilter() {
+            ['settings', 'extensions', 'keybindings'].forEach(tabName => {
+                const searchInput = document.getElementById(tabName + '-search');
+                const filterButtons = document.querySelectorAll(`#${tabName}-tab .filter-btn`);
+
+                // Search input event listener with debouncing for performance
+                let searchTimeout;
+                searchInput.addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        filterStates[tabName].search = e.target.value.toLowerCase();
+                        renderItems(tabName);
+                    }, 300); // 300ms debounce to avoid excessive filtering
+                });
+
+                // Filter button event listeners
+                filterButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        filterButtons.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        filterStates[tabName].filter = btn.getAttribute('data-filter');
+                        renderItems(tabName);
+                    });
+                });
+            });
+        }
+
+        // Requests initial configuration data from the VS Code extension
+        function requestInitialData() {
+            // This function would send a message to the VS Code extension to get current data
+            // For now, we'll simulate loading with sample data
+            setTimeout(() => {
+                // Simulate receiving data from the extension
+                loadSampleData();
+                renderAllTabs();
+            }, 1000);
+        }
+
+        // Loads sample data to demonstrate the interface functionality
+        function loadSampleData() {
+            configData = {
+                settings: [
+                    { key: 'editor.fontSize', value: '14', description: 'Controls the font size in pixels' },
+                    { key: 'editor.tabSize', value: '4', description: 'The number of spaces a tab is equal to' },
+                    { key: 'python.pythonPath', value: '/usr/bin/python3', description: 'Path to Python executable' },
+                    { key: 'dart.flutterSdkPath', value: 'C:\\flutter\\bin', description: 'Flutter SDK path' },
+                    { key: 'workbench.colorTheme', value: 'Dark+', description: 'Specifies the color theme' },
+                    { key: 'git.enableSmartCommit', value: 'true', description: 'Enable smart commit' }
+                ],
+                extensions: [
+                    { id: 'ms-python.python', name: 'Python', description: 'IntelliSense, linting, debugging' },
+                    { id: 'dart-code.flutter', name: 'Flutter', description: 'Flutter support and debugger' },
+                    { id: 'eamodio.gitlens', name: 'GitLens', description: 'Supercharge Git capabilities' },
+                    { id: 'ms-vscode.vscode-typescript-next', name: 'TypeScript', description: 'TypeScript language support' },
+                    { id: 'bradlc.vscode-tailwindcss', name: 'Tailwind CSS', description: 'Tailwind CSS IntelliSense' }
+                ],
+                keybindings: [
+                    { key: 'F10', command: 'workbench.action.debug.stepOver', description: 'Step Over' },
+                    { key: 'F11', command: 'workbench.action.debug.stepInto', description: 'Step Into' },
+                    { key: 'Ctrl+Shift+P', command: 'workbench.action.showCommands', description: 'Show Command Palette' },
+                    { key: 'Ctrl+K Ctrl+S', command: 'workbench.action.openGlobalKeybindings', description: 'Open Keyboard Shortcuts' },
+                    { key: 'Ctrl+`', command: 'workbench.action.terminal.toggleTerminal', description: 'Toggle Terminal' }
+                ],
+                settingsIgnored: ['dart.flutterSdkPath', 'python.pythonPath'],
+                extensionsIgnored: ['dart-code.flutter'],
+                keybindingsIgnored: ['F10', 'F11']
+            };
+        }
+
+        // Renders all tabs with their current data and filter states
+        function renderAllTabs() {
+            renderItems('settings');
+            renderItems('extensions');
+            renderItems('keybindings');
+        }
+
+        // Renders items for a specific tab based on current filter and search criteria
+        function renderItems(tabName) {
+            const container = document.getElementById(tabName + '-container');
+            const items = configData[tabName];
+            const ignoredList = configData[tabName + 'Ignored'];
+            const { search, filter } = filterStates[tabName];
+
+            // Filter items based on search query and selected filter
+            const filteredItems = items.filter(item => {
+                const matchesSearch = searchMatches(item, search, tabName);
+                const isIgnored = isItemIgnored(item, ignoredList, tabName);
+                
+                if (filter === 'synced') return matchesSearch && !isIgnored;
+                if (filter === 'ignored') return matchesSearch && isIgnored;
+                return matchesSearch; // 'all' filter
+            });
+
+            // Render the filtered items
+            if (filteredItems.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <div>No ${tabName} found matching current filters</div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = filteredItems.map(item => renderItem(item, tabName, ignoredList)).join('');
+            }
+
+            // Update summary statistics
+            updateSummary(tabName);
+        }
+
+        // Determines if a search query matches an item based on the tab type
+        function searchMatches(item, search, tabName) {
+            if (!search) return true;
+            
+            switch (tabName) {
+                case 'settings':
+                    return item.key.toLowerCase().includes(search) || 
+                           item.value.toLowerCase().includes(search) ||
+                           item.description.toLowerCase().includes(search);
+                case 'extensions':
+                    return item.name.toLowerCase().includes(search) || 
+                           item.id.toLowerCase().includes(search) ||
+                           item.description.toLowerCase().includes(search);
+                case 'keybindings':
+                    return item.key.toLowerCase().includes(search) || 
+                           item.command.toLowerCase().includes(search) ||
+                           item.description.toLowerCase().includes(search);
+                default:
+                    return true;
+            }
+        }
+
+        // Checks if an item is currently in the ignored list
+        function isItemIgnored(item, ignoredList, tabName) {
+            switch (tabName) {
+                case 'settings':
+                    return ignoredList.includes(item.key);
+                case 'extensions':
+                    return ignoredList.includes(item.id);
+                case 'keybindings':
+                    return ignoredList.includes(item.key);
+                default:
+                    return false;
+            }
+        }
+
+        // Renders a single item with appropriate styling and interaction elements
+        function renderItem(item, tabName, ignoredList) {
+            const isIgnored = isItemIgnored(item, ignoredList, tabName);
+            const identifier = getItemIdentifier(item, tabName);
+            
+            let icon, title, subtitle;
+            
+            switch (tabName) {
+                case 'settings':
+                    icon = '⚙️';
+                    title = item.key;
+                    subtitle = `${item.value} - ${item.description}`;
+                    break;
+                case 'extensions':
+                    icon = item.name.substring(0, 2).toUpperCase();
+                    title = item.name;
+                    subtitle = item.id;
+                    break;
+                case 'keybindings':
+                    icon = '⌨️';
+                    title = `${item.key} → ${item.command}`;
+                    subtitle = item.description;
+                    break;
+            }
+
+            const statusLabel = getStatusLabel(tabName, isIgnored);
+            const statusClass = isIgnored ? 'ignored' : 'synced';
+
+            return `
+                <div class="item ${isIgnored ? 'ignored' : ''}" onclick="toggleItemIgnore('${tabName}', '${identifier}')">
+                    <input type="checkbox" class="item-checkbox" ${isIgnored ? 'checked' : ''} 
+                           onchange="toggleItemIgnore('${tabName}', '${identifier}')" onclick="event.stopPropagation()">
+                    <div class="item-icon">${icon}</div>
+                    <div class="item-details">
+                        <div class="item-name">${title}</div>
+                        <div class="item-description">${subtitle}</div>
+                    </div>
+                    <div class="item-status">
+                        <span class="status-badge ${statusClass}">${statusLabel}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Gets the appropriate identifier for an item based on its type
+        function getItemIdentifier(item, tabName) {
+            switch (tabName) {
+                case 'settings': return item.key;
+                case 'extensions': return item.id;
+                case 'keybindings': return item.key;
+                default: return '';
+            }
+        }
+
+        // Gets the appropriate status label for different tab types
+        function getStatusLabel(tabName, isIgnored) {
+            if (tabName === 'extensions') {
+                return isIgnored ? 'Protected' : 'Synced';
+            } else if (tabName === 'keybindings') {
+                return isIgnored ? 'Priority' : 'Synced';
+            } else {
+                return isIgnored ? 'Ignored' : 'Synced';
+            }
+        }
+
+        // Toggles the ignore state of a specific item
+        function toggleItemIgnore(tabName, identifier) {
+            const ignoredList = configData[tabName + 'Ignored'];
+            const index = ignoredList.indexOf(identifier);
+            
+            if (index === -1) {
+                ignoredList.push(identifier);
+            } else {
+                ignoredList.splice(index, 1);
+            }
+            
+            renderItems(tabName);
+        }
+
+        // Updates the summary statistics for a specific tab
+        function updateSummary(tabName) {
+            const items = configData[tabName];
+            const ignoredList = configData[tabName + 'Ignored'];
+            
+            const total = items.length;
+            const ignored = ignoredList.length;
+            const synced = total - ignored;
+            
+            document.getElementById(tabName + '-total').textContent = total;
+            document.getElementById(tabName + '-synced').textContent = synced;
+            document.getElementById(tabName + '-ignored').textContent = ignored;
+        }
+
+        // Bulk action functions for managing multiple items at once
+        function selectAll() {
+            const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+            const container = document.getElementById(activeTab + '-container');
+            const checkboxes = container.querySelectorAll('.item-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                if (!checkbox.checked) {
+                    checkbox.checked = true;
+                    checkbox.onchange();
+                }
+            });
+        }
+
+        function selectNone() {
+            const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+            const container = document.getElementById(activeTab + '-container');
+            const checkboxes = container.querySelectorAll('.item-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    checkbox.checked = false;
+                    checkbox.onchange();
+                }
+            });
+        }
+
+        function toggleSelected() {
+            const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+            const container = document.getElementById(activeTab + '-container');
+            const checkboxes = container.querySelectorAll('.item-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = !checkbox.checked;
+                checkbox.onchange();
+            });
+        }
+
+        // Configuration management functions
+        function saveConfiguration() {
+            const configuration = {
+                settingsIgnored: configData.settingsIgnored,
+                extensionsIgnored: configData.extensionsIgnored,
+                keybindingsIgnored: configData.keybindingsIgnored
+            };
+
+            console.log('Saving configuration:', configuration);
+            
+            // Send configuration back to VS Code extension
+            if (window.acquireVsCodeApi) {
+                const vscode = window.acquireVsCodeApi();
+                vscode.postMessage({
+                    command: 'saveConfiguration',
+                    data: configuration
+                });
+            }
+        }
+
+        function resetToDefaults() {
+            if (confirm('Are you sure you want to reset all ignore lists? This will remove all current exclusions and protections.')) {
+                configData.settingsIgnored = [];
+                configData.extensionsIgnored = [];
+                configData.keybindingsIgnored = [];
+                renderAllTabs();
+            }
+        }
+
+        function cancelChanges() {
+            if (window.acquireVsCodeApi) {
+                const vscode = window.acquireVsCodeApi();
+                vscode.postMessage({
+                    command: 'cancel'
+                });
+            }
+        }
+
+        // Function to receive data from VS Code extension
+        function loadConfigurationData(data) {
+            configData = {
+                settings: data.settings || [],
+                extensions: data.extensions || [],
+                keybindings: data.keybindings || [],
+                settingsIgnored: data.settingsIgnored || [],
+                extensionsIgnored: data.extensionsIgnored || [],
+                keybindingsIgnored: data.keybindingsIgnored || []
+            };
+            
+            renderAllTabs();
+        }
+
+        // Handle messages from VS Code extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            
+            switch (message.command) {
+                case 'loadData':
+                    loadConfigurationData(message.data);
+                    break;
+                case 'updateIgnoreList':
+                    // Handle real-time updates to ignore lists
+                    if (message.type && message.list) {
+                        configData[message.type + 'Ignored'] = message.list;
+                        renderItems(message.type);
+                    }
+                    break;
+            }
+        });
+
+        // Enhanced search functionality with keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + F to focus search in active tab
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+                const searchInput = document.getElementById(activeTab + '-search');
+                searchInput.focus();
+                searchInput.select();
+            }
+            
+            // Escape to clear search
+            if (e.key === 'Escape') {
+                const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
+                const searchInput = document.getElementById(activeTab + '-search');
+                if (document.activeElement === searchInput) {
+                    searchInput.value = '';
+                    filterStates[activeTab].search = '';
+                    renderItems(activeTab);
+                    searchInput.blur();
+                }
+            }
+            
+            // Ctrl/Cmd + A to select all visible items
+            if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !e.target.matches('input')) {
+                e.preventDefault();
+                selectAll();
+            }
+        });
+
+        // Advanced filtering functions for power users
+        function filterByPattern(tabName, pattern) {
+            const items = configData[tabName];
+            const regex = new RegExp(pattern, 'i');
+            
+            return items.filter(item => {
+                switch (tabName) {
+                    case 'settings':
+                        return regex.test(item.key);
+                    case 'extensions':
+                        return regex.test(item.id) || regex.test(item.name);
+                    case 'keybindings':
+                        return regex.test(item.command) || regex.test(item.key);
+                    default:
+                        return false;
+                }
+            });
+        }
+
+        // Bulk operations for common patterns
+        function ignoreAllByPrefix(tabName, prefix) {
+            const items = configData[tabName];
+            const ignoredList = configData[tabName + 'Ignored'];
+            
+            items.forEach(item => {
+                const identifier = getItemIdentifier(item, tabName);
+                if (identifier.startsWith(prefix) && !ignoredList.includes(identifier)) {
+                    ignoredList.push(identifier);
+                }
+            });
+            
+            renderItems(tabName);
+        }
+
+        // Export/Import functionality for power users who want to share configurations
+        function exportConfiguration() {
+            const config = {
+                settingsIgnored: configData.settingsIgnored,
+                extensionsIgnored: configData.extensionsIgnored,
+                keybindingsIgnored: configData.keybindingsIgnored,
+                exportDate: new Date().toISOString(),
+                version: '1.0'
+            };
+            
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sync-everything-config.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importConfiguration(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    
+                    if (config.settingsIgnored) configData.settingsIgnored = config.settingsIgnored;
+                    if (config.extensionsIgnored) configData.extensionsIgnored = config.extensionsIgnored;
+                    if (config.keybindingsIgnored) configData.keybindingsIgnored = config.keybindingsIgnored;
+                    
+                    renderAllTabs();
+                    alert('Configuration imported successfully!');
+                } catch (error) {
+                    alert('Error importing configuration: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Performance optimization for large lists
+        function virtualizeList(tabName) {
+            // For future implementation - virtual scrolling for very large lists
+            // This would render only visible items to improve performance
+            // with thousands of settings/extensions/keybindings
+        }
+
+        // Context menu functionality for advanced operations
+        function showContextMenu(event, tabName, identifier) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Create context menu dynamically
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.position = 'fixed';
+            menu.style.left = event.clientX + 'px';
+            menu.style.top = event.clientY + 'px';
+            menu.style.backgroundColor = 'var(--vscode-menu-background)';
+            menu.style.border = '1px solid var(--vscode-menu-border)';
+            menu.style.borderRadius = '3px';
+            menu.style.padding = '4px 0';
+            menu.style.zIndex = '1000';
+            menu.style.minWidth = '200px';
+            
+            const isIgnored = isItemIgnored(
+                configData[tabName].find(item => getItemIdentifier(item, tabName) === identifier),
+                configData[tabName + 'Ignored'],
+                tabName
+            );
+            
+            menu.innerHTML = `
+                <div class="context-menu-item" onclick="toggleItemIgnore('${tabName}', '${identifier}'); closeContextMenu();">
+                    ${isIgnored ? 'Remove from ignore list' : 'Add to ignore list'}
+                </div>
+                <div class="context-menu-item" onclick="copyToClipboard('${identifier}'); closeContextMenu();">
+                    Copy identifier
+                </div>
+                <div class="context-menu-item" onclick="showItemDetails('${tabName}', '${identifier}'); closeContextMenu();">
+                    Show details
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // Close menu when clicking elsewhere
+            setTimeout(() => {
+                document.addEventListener('click', closeContextMenu);
+            }, 0);
+        }
+
+        function closeContextMenu() {
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+            document.removeEventListener('click', closeContextMenu);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show temporary success message
+                showToast('Copied to clipboard: ' + text);
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.backgroundColor = 'var(--vscode-notifications-background)';
+            toast.style.color = 'var(--vscode-notifications-foreground)';
+            toast.style.padding = '12px 16px';
+            toast.style.borderRadius = '4px';
+            toast.style.zIndex = '1001';
+            toast.style.maxWidth = '300px';
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function showItemDetails(tabName, identifier) {
+            const item = configData[tabName].find(item => getItemIdentifier(item, tabName) === identifier);
+            if (!item) return;
+            
+            let details = '';
+            switch (tabName) {
+                case 'settings':
+                    details = `Key: ${item.key}\nValue: ${item.value}\n`;
+                    break;
+                case 'extensions':
+                    details = `Name: ${item.name}\nID: ${item.id}`;
+                    break;
+                case 'keybindings':
+                    details = `Key: ${item.key}\nCommand: ${item.command}`;
+                    break;
+            }
+            
+            alert(details); // In a real implementation, this would be a proper modal
+        }
+    </script>
+</body>
+</html>
