@@ -68,7 +68,7 @@ This extension contributes the following settings:
 
 ## Known Issues
 
--   None Currently, please report issues as found
+-  Reading files on MacOS returns an undefined object on some devices
 
 ## Release Notes
 
