@@ -105,7 +105,11 @@ export const validatePaths = async (
 		if (!path) {
 			path = await findConfigFile(appName, 'settings.json');
 		}
-		if (!path) {
+                if (path) {
+                        // Store the found path in the context store
+                        settingsPath.set(path);
+                        logger.info(`Stored settings path: ${path}`);
+                } else {
 			await setManualPath(settingsPath, 'settings');
 		}
 	}
@@ -117,7 +121,11 @@ export const validatePaths = async (
 			path = await findConfigFile(appName, 'keybindings.json');
 		}
 
-		if (!path) {
+                if (path) {
+                        // Store the found path in the context store
+                        keybindingsPath.set(path);
+                        logger.info(`Stored keybindings path: ${path}`);
+                } else {
 			await setManualPath(keybindingsPath, 'keybindings');
 		}
 	}
