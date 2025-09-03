@@ -13,7 +13,9 @@ A powerful VS Code extension that enables seamless synchronization of your VS Co
     -   Custom Keybindings
 -   🔍 **Smart Conflict Resolution**: Handles extension installation/uninstallation with confirmation
 -   📊 **Progress Tracking**: Visual progress indicators for sync operations
--   📝 **Detailed Logging**: Comprehensive logging for troubleshooting
+-   📝 **Enhanced Logging**: Comprehensive logging with origin tracking for better troubleshooting
+-   🏗️ **Improved Architecture**: Streamlined codebase with better error handling and maintainability
+-   🎯 **Status Bar Integration**: Quick access to sync menu via status bar icon
 
 ## Requirements
 
@@ -33,7 +35,7 @@ A powerful VS Code extension that enables seamless synchronization of your VS Co
 ### Initial Setup
 
 1. After installation, you'll be prompted to sign in to GitHub
-2. The extension will automatically create a "Genesis" profile with your current settings if no profiles have been created yet
+2. The extension will automatically create an "Origin" profile with your current settings if no profiles have been created yet
 3. If profiles do exist already, use the pull profile command to sync your current editor
 
 ### Important Notes
@@ -63,6 +65,7 @@ Access all commands through the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`
 This extension contributes the following settings:
 
 -   `synceverything.confirmBeforeSync`: Enable/disable confirmation before syncing extensions
+-   `synceverything.excludeExtensions`: Array of extension IDs to exclude from sync operations
 -   ~~`synceverything.customSettingsPath`: Custom path for settings.json~~ **(Deprecated in beta 0.2)**
 -   ~~`synceverything.customKeybindingsPath`: Custom path for keybindings.json~~ **(Deprecated in beta 0.2)**
 
@@ -71,6 +74,17 @@ This extension contributes the following settings:
 -  Reading files on MacOS returns an undefined object on some devices
 
 ## Release Notes
+
+### 0.3.0 (Beta)
+
+-   **Major Architecture Refactor**: Complete rewrite with improved class-based architecture
+-   **Enhanced Error Handling**: Better error messages and recovery mechanisms
+-   **Improved Logging**: Added origin tracking and more verbose logging for debugging
+-   **Status Bar Integration**: Added sync icon in status bar for quick access
+-   **Code Simplification**: Removed redundant methods and consolidated functionality
+-   **Bug Fixes**: Fixed keybindings sync issue and GitHub API endpoint corrections
+-   **Better Path Management**: Improved automatic detection of settings and keybindings files
+-   **JSON5 Support**: Enhanced JSON parsing with support for comments and trailing commas
 
 ### 0.2.0 (Beta)
 
