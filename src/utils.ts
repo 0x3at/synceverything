@@ -43,7 +43,7 @@ export const findConfigFile = async (
   const possiblePaths = getConfigPaths(appName, file);
   for (const path of possiblePaths) {
     if (await pathExists(path)) {
-      return Uri.parse(path).fsPath;
+      return Uri.file(path).fsPath;
     } else {
       continue;
     }

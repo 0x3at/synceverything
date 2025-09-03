@@ -114,7 +114,7 @@ export default class Logger {
         window.showInformationMessage(message);
       case level === "warn":
         window.showWarningMessage(message);
-      case level == "error":
+      case level === "error":
         window.showErrorMessage(message);
     }
   }
