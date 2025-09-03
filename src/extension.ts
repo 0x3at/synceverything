@@ -1,554 +1,487 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
+import Logger from "./core/logger";
+import { IGist, IProfile } from "./models/interfaces";
+import SyncEverything from "./core/synceverything";
+import GistService from "./core/gist";
+import { workspace } from "vscode";
 
-import {
-	createMasterGist,
-	createProfile,
-	deleteProfile,
-	getGist,
-	getMasterList,
-	getRawProfile,
-	updateMasterGist
-} from './core/gist';
-import Logger from './core/logger';
-import {
-	getExtensions,
-	getKeybindings,
-	getSettings,
-	setExtensions,
-	setKeybindings,
-	setManualPath,
-	setSettings,
-	validatePaths
-} from './core/profile';
-import { IGist, IProfile } from './models/interfaces';
+export const appName = vscode.env.appName.includes("Code")
+  ? vscode.env.appName.includes("Insiders")
+    ? "Code - Insiders"
+    : "Code"
+  : "Cursor";
+export const extConfig = vscode.workspace.getConfiguration("synceverything");
 
-export interface IContextStore<T> {
-	missing(): boolean;
-	get(): T | undefined;
-	set(val: T): void;
-	clear(): void;
-}
 export let logger: Logger;
 let statusBarItem: vscode.StatusBarItem;
-export const appName = vscode.env.appName.includes('Code') ? 'Code' : 'Cursor';
-export const extConfig = vscode.workspace.getConfiguration('synceverything');
 
 export async function activate(ctx: vscode.ExtensionContext) {
-	try {
-		logger = new Logger();
-		logger.info('Extension activation started');
+  try {
+    // Initialize Logger
+    logger = new Logger();
+    logger.info("Extension activation started");
 
-		const contextStore = <T>(key: string): IContextStore<T> => {
-			return {
-				missing: () => ctx.globalState.get(key) === undefined,
-				get: (): T | undefined => ctx.globalState.get(key),
-				set: (val: T) => ctx.globalState.update(key, val),
-				clear: () => ctx.globalState.update(key, undefined)
-			};
-		};
+    // Initialize Status Bar
+    statusBarItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      100
+    );
+    statusBarItem.text = "$(sync~spin) Sync Everything";
+    statusBarItem.tooltip = "Sync Everything: Click to show menu";
+    statusBarItem.command = "synceverything.showmenu";
+    statusBarItem.show();
 
-		// Value Stores
-		const masterId: IContextStore<string> =
-			contextStore<string>('masterId');
-		const settingsPath: IContextStore<string> =
-			contextStore<string>('settingsPath');
-		const keybindingsPath: IContextStore<string> =
-			contextStore<string>('keybindingsPath');
+    // Initialize SyncEverything
+    const ExtensionController: SyncEverything | undefined =
+      await SyncEverything.initialize(logger, ctx);
+    if (!ExtensionController) {
+      logger.error("Failed to initialize Sync Everything", "activate", true);
+      deactivate(true);
+      return;
+    }
+    // Initialize Gist Service
+    const gistService: GistService | undefined = await GistService.initialize(
+      logger
+    );
+    if (!gistService) {
+      logger.error(
+        "Failed to create Gist Service, cannot activate extension without valid connection to Git API",
+        "activate",
+        true
+      );
+      deactivate(true);
+      return;
+    }
 
-		// Master gist initialization
-		const initializeMasterGist = async () => {
-			if (masterId.missing() || !masterId.get()) {
-				logger.info('Initializing master gist...');
-				const master: IGist | undefined = await getMasterList();
-				if (master) {
-					masterId.set(master.id);
-					logger.info(`Found existing master gist: ${master.id}`);
-				} else {
-					logger.info('Creating new master gist...');
-					const profile: IProfile = {
-						profileName: 'Genesis',
-						settings: await getSettings(
-							settingsPath.get() as string
-						),
-						extensions: getExtensions(),
-						keybindings: await getKeybindings(
-							keybindingsPath.get() as string
-						)
-					};
-					const gist = await createMasterGist(profile);
-					masterId.set(gist.id);
-					logger.info(`Created new master gist: ${gist.id}`);
-				}
-			}
-		};
+    // Find Master List
+    let masterList = await gistService.getMaster();
+    // Create Master List if it does not exist
+    if (!masterList) {
+      const defaultProfile = await ExtensionController.getActiveProfile();
+      // Default Origin Profile Name
+      defaultProfile.profileName = "Origin";
+      masterList = await gistService.createMaster(defaultProfile as IProfile);
+      ctx.globalState.update("masterId", masterList.id);
+      gistService.masterId = masterList.id;
+    } else {
+      // Ensure the stored master list is the same as the found master list
+      if (masterList.id != ctx.globalState.get("masterId"))
+        ctx.globalState.update("masterId", masterList.id);
+    }
 
-		// Initialize extension
-		const initializeExtension = async (): Promise<boolean> => {
-			try {
-				logger.info('Starting extension initialization...');
+    // Validate master list was stored
+    if (!ctx.globalState.get("masterId")) {
+      logger.error(
+        "Something failed when attempting to find master list Gist ID, check logs for more details",
+        "activate",
+        true
+      );
+      deactivate(true);
+      return;
+    }
 
-				// Validate and initialize paths
-				if (!(await validatePaths(settingsPath, keybindingsPath))) {
-					throw new Error('Required configuration files not found');
-				}
+    // Command implementations
+    const CreateProfile = vscode.commands.registerCommand(
+      "synceverything.createprofile",
+      async () => {
+        try {
+          const profileName = await vscode.window.showInputBox({
+            prompt: "Enter profile name",
+            validateInput: (value) => {
+              if (!value || value.trim().length === 0) {
+                return "Profile name cannot be empty";
+              }
+              if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+                return "Profile name can only contain letters, numbers, hyphens, and underscores";
+              }
+              return null;
+            },
+          });
 
-				// Initialize or find master gist
-				await initializeMasterGist();
+          if (!profileName) {
+            return;
+          }
 
-				logger.info('Extension initialized successfully');
-				return true;
-			} catch (error) {
-				logger.error('Failed to initialize extension', error);
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Creating profile "${profileName}"...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({
+                message: "Reading local configuration...",
+              });
 
-				const retry = await vscode.window.showErrorMessage(
-					'Sync Everything failed to initialize. Would you like to retry?',
-					'Retry',
-					'Show Logs',
-					'Disable'
-				);
+              const currentProfile =
+                await ExtensionController.getActiveProfile();
+              const profile: IProfile = {
+                profileName,
+                settings: currentProfile.settings!,
+                extensions: currentProfile.extensions!,
+                keybindings: currentProfile.keybindings!,
+              };
 
-				if (retry === 'Retry') {
-					return await initializeExtension();
-				} else if (retry === 'Show Logs') {
-					logger.show();
-				}
+              progress.report({
+                message: "Uploading to GitHub...",
+              });
+              await gistService.createProfile(profile);
 
-				return false;
-			}
-		};
+              logger.info(
+                `Created profile: ${profileName}`,
+                false,
+                "CreateProfile"
+              );
+              vscode.window.showInformationMessage(
+                `Profile "${profileName}" created successfully!`
+              );
+            }
+          );
+        } catch (error) {
+          logger.error(
+            `Failed to create profile`,
+            "CreateProfile",
+            true,
+            error
+          );
+        }
+      }
+    );
 
-		// Command implementations
-		const CreateProfile = vscode.commands.registerCommand(
-			'synceverything.createprofile',
-			async () => {
-				try {
-					const profileName = await vscode.window.showInputBox({
-						prompt: 'Enter profile name',
-						validateInput: (value) => {
-							if (!value || value.trim().length === 0) {
-								return 'Profile name cannot be empty';
-							}
-							if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-								return 'Profile name can only contain letters, numbers, hyphens, and underscores';
-							}
-							return null;
-						}
-					});
+    const PullProfile = vscode.commands.registerCommand(
+      "synceverything.pullprofile",
+      async () => {
+        try {
+          // Get the latest master gist
+          const masterGist = await gistService.getMaster();
+          if (!masterGist) {
+            vscode.window.showErrorMessage("No master gist found");
+            return;
+          }
 
-					if (!profileName) {
-						return;
-					}
+          const profileNames = Object.keys(masterGist.files).filter((name) =>
+            name.endsWith(".json")
+          );
 
-					await vscode.window.withProgress(
-						{
-							location: vscode.ProgressLocation.Notification,
-							title: `Creating profile "${profileName}"...`,
-							cancellable: false
-						},
-						async (progress) => {
-							progress.report({
-								message: 'Reading current settings...'
-							});
+          if (profileNames.length === 0) {
+            vscode.window.showInformationMessage("No profiles found");
+            return;
+          }
 
-							const profile: IProfile = {
-								profileName,
-								settings: await getSettings(
-									settingsPath.get() as string
-								),
-								extensions: getExtensions(),
-								keybindings: await getKeybindings(
-									keybindingsPath.get() as string
-								)
-							};
+          const selectedProfile = await vscode.window.showQuickPick(
+            profileNames.map((name) => ({
+              label: name.replace(".json", ""),
+              description: `Profile: ${name.replace(".json", "")}`,
+            })),
+            { placeHolder: "Select a profile to pull" }
+          );
 
-							progress.report({
-								message: 'Uploading to GitHub...'
-							});
-							await createProfile(
-								masterId.get() as string,
-								profile
-							);
+          if (!selectedProfile) {
+            return;
+          }
 
-							logger.info(`Created profile: ${profileName}`);
-							vscode.window.showInformationMessage(
-								`Profile "${profileName}" created successfully!`
-							);
-						}
-					);
-				} catch (error) {
-					logger.error(`Failed to create profile`, error);
-				}
-			}
-		);
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Pulling profile "${selectedProfile.label}"...`,
+              cancellable: false,
+            },
+            async (progress) => {
+				progress.report({
+					message:"Pulling remote profile data",
+					increment:25,
+				})
+              const profileFile =
+                masterGist.files[`${selectedProfile.label}.json`];
+              const profile = await gistService.getProfile(profileFile.raw_url);
 
-		const PullProfile = vscode.commands.registerCommand(
-			'synceverything.pullprofile',
-			async () => {
-				try {
-					const masterGist = await getGist(masterId.get() as string);
-					const profileNames = Object.keys(masterGist.files);
+              progress.report({
+                message: "Applying profile locally...",
+                increment: 50,
+              });
 
-					if (profileNames.length === 0) {
-						vscode.window.showInformationMessage(
-							'No profiles found'
-						);
-						return;
-					}
+              await ExtensionController.updateLocalProfile(profile);
 
-					const selectedProfile = await vscode.window.showQuickPick(
-						profileNames.map((name) => ({
-							label: name.replace('.json', ''),
-							description: `Profile: ${name.replace('.json', '')}`
-						})),
-						{ placeHolder: 'Select a profile to pull' }
-					);
+              progress.report({
+                message: "Complete!",
+                increment: 100,
+              });
+            }
+          );
 
-					if (!selectedProfile) {
-						return;
-					}
+          logger.info(
+            `Pulled profile: ${selectedProfile.label}`,
+            false,
+            "PullProfile"
+          );
+          const reload = await vscode.window.showInformationMessage(
+            `Profile "${selectedProfile.label}" applied successfully! Reload window to see all changes?`,
+            "Reload Now",
+            "Later"
+          );
 
-					const confirmPull = await vscode.window.showWarningMessage(
-						`This will overwrite your current settings, extensions, and keybindings with "${selectedProfile.label}". Continue?`,
-						'Yes',
-						'No'
-					);
+          if (reload === "Reload Now") {
+            await vscode.commands.executeCommand(
+              "workbench.action.reloadWindow"
+            );
+          }
+        } catch (error) {
+          logger.error(`Failed to pull profile`, "PullProfile", true, error);
+        }
+      }
+    );
 
-					if (confirmPull !== 'Yes') {
-						return;
-					}
+    const UpdateProfile = vscode.commands.registerCommand(
+      "synceverything.updateprofile",
+      async () => {
+        try {
+          const masterGist = await gistService.getMaster();
+          if (!masterGist) {
+            vscode.window.showErrorMessage("No master gist found");
+            return;
+          }
 
-					await vscode.window.withProgress(
-						{
-							location: vscode.ProgressLocation.Notification,
-							title: `Pulling profile "${selectedProfile.label}"...`,
-							cancellable: false
-						},
-						async (progress) => {
-							const profileFile =
-								masterGist.files[
-									`${selectedProfile.label}.json`
-								];
-							const profile = await getRawProfile(
-								profileFile.raw_url
-							);
+          const profileNames = Object.keys(masterGist.files).filter((name) =>
+            name.endsWith(".json")
+          );
 
-							progress.report({
-								message: 'Updating settings...',
-								increment: 25
-							});
-							await setSettings(
-								settingsPath.get() as string,
-								profile.settings
-							);
+          if (profileNames.length === 0) {
+            vscode.window.showInformationMessage("No profiles found to update");
+            return;
+          }
 
-							progress.report({
-								message: 'Syncing extensions...',
-								increment: 50
-							});
-							await setExtensions(profile.extensions);
+          const selectedProfile = await vscode.window.showQuickPick(
+            profileNames.map((name) => ({
+              label: name.replace(".json", ""),
+              description: `Update profile: ${name.replace(".json", "")}`,
+            })),
+            { placeHolder: "Select a profile to update" }
+          );
 
-							progress.report({
-								message: 'Updating keybindings...',
-								increment: 75
-							});
-							await setKeybindings(
-								keybindingsPath.get() as string,
-								profile.keybindings
-							);
+          if (!selectedProfile) {
+            return;
+          }
 
-							progress.report({
-								message: 'Complete!',
-								increment: 100
-							});
-						}
-					);
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Updating profile "${selectedProfile.label}"...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({
+                message: "Reading current configuration...",
+              });
 
-					logger.info(`Pulled profile: ${selectedProfile.label}`);
-					const reload = await vscode.window.showInformationMessage(
-						`Profile "${selectedProfile.label}" applied successfully! Reload window to see all changes?`,
-						'Reload Now',
-						'Later'
-					);
+              const currentProfile =
+                await ExtensionController.getActiveProfile();
+              const updatedProfile: IProfile = {
+                profileName: selectedProfile.label,
+                settings: currentProfile.settings!,
+                extensions: currentProfile.extensions!,
+                keybindings: currentProfile.keybindings!,
+              };
 
-					if (reload === 'Reload Now') {
-						await vscode.commands.executeCommand(
-							'workbench.action.reloadWindow'
-						);
-					}
-				} catch (error) {
-					logger.error(`Failed to pull profile`, error);
-				}
-			}
-		);
+              progress.report({
+                message: "Uploading to GitHub...",
+              });
+              await gistService.createProfile(updatedProfile);
 
-		const UpdateProfile = vscode.commands.registerCommand(
-			'synceverything.updateprofile',
-			async () => {
-				try {
-					const masterGist = await getGist(masterId.get() as string);
-					const profileNames = Object.keys(masterGist.files);
+              logger.info(
+                `Updated profile: ${selectedProfile.label}`,
+                false,
+                "UpdateProfile"
+              );
+              vscode.window.showInformationMessage(
+                `Profile "${selectedProfile.label}" updated successfully!`
+              );
+            }
+          );
+        } catch (error) {
+          logger.error(
+            `Failed to update profile`,
+            "UpdateProfile",
+            true,
+            error
+          );
+        }
+      }
+    );
 
-					if (profileNames.length === 0) {
-						vscode.window.showInformationMessage(
-							'No profiles found to update'
-						);
-						return;
-					}
+    const DeleteProfile = vscode.commands.registerCommand(
+      "synceverything.deleteprofile",
+      async () => {
+        try {
+          const masterGist = await gistService.getMaster();
+          if (!masterGist) {
+            vscode.window.showErrorMessage("No master gist found");
+            return;
+          }
 
-					const selectedProfile = await vscode.window.showQuickPick(
-						profileNames.map((name) => ({
-							label: name.replace('.json', ''),
-							description: `Update profile: ${name.replace(
-								'.json',
-								''
-							)}`
-						})),
-						{ placeHolder: 'Select a profile to update' }
-					);
+          const profileNames = Object.keys(masterGist.files).filter((name) =>
+            name.endsWith(".json")
+          );
 
-					if (!selectedProfile) {
-						return;
-					}
+          if (profileNames.length === 0) {
+            vscode.window.showInformationMessage("No profiles found to delete");
+            return;
+          }
 
-					const confirmUpdate =
-						await vscode.window.showWarningMessage(
-							`This will update "${selectedProfile.label}" with your current settings, extensions, and keybindings. Continue?`,
-							'Yes',
-							'No'
-						);
+          const selectedProfile = await vscode.window.showQuickPick(
+            profileNames.map((name) => ({
+              label: name.replace(".json", ""),
+              description: `Delete profile: ${name.replace(".json", "")}`,
+            })),
+            { placeHolder: "Select a profile to delete" }
+          );
 
-					if (confirmUpdate !== 'Yes') {
-						return;
-					}
+          if (!selectedProfile) {
+            return;
+          }
 
-					await vscode.window.withProgress(
-						{
-							location: vscode.ProgressLocation.Notification,
-							title: `Updating profile "${selectedProfile.label}"...`,
-							cancellable: false
-						},
-						async (progress) => {
-							progress.report({
-								message: 'Reading current configuration...'
-							});
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Deleting profile "${selectedProfile.label}"...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              await gistService.deleteProfile(selectedProfile.label);
+              logger.info(
+                `Deleted profile: ${selectedProfile.label}`,
+                false,
+                "DeleteProfile"
+              );
+              vscode.window.showInformationMessage(
+                `Profile "${selectedProfile.label}" deleted successfully!`
+              );
+            }
+          );
+        } catch (error) {
+          logger.error(
+            `Failed to delete profile`,
+            "DeleteProfile",
+            true,
+            error
+          );
+        }
+      }
+    );
 
-							const updatedProfile: IProfile = {
-								profileName: selectedProfile.label,
-								settings: await getSettings(
-									settingsPath.get() as string
-								),
-								extensions: getExtensions(),
-								keybindings: await getKeybindings(
-									keybindingsPath.get() as string
-								)
-							};
+    const ShowMenu = vscode.commands.registerCommand(
+      "synceverything.showmenu",
+      async () => {
+        const options = [
+          {
+            label: "$(plus) Create Profile",
+            command: "synceverything.createprofile",
+          },
+          {
+            label: "$(cloud-download) Pull Profile",
+            command: "synceverything.pullprofile",
+          },
+          {
+            label: "$(sync) Update Profile",
+            command: "synceverything.updateprofile",
+          },
+          {
+            label: "$(trash) Delete Profile",
+            command: "synceverything.deleteprofile",
+          },
+          {
+            label: "$(output) Show Logs",
+            command: "synceverything.showlogs",
+          },
+          {
+            label: "$(file-symlink-directory) Set Paths Manually",
+            command: "synceverything.setpathsmanually",
+          },
+        ];
 
-							progress.report({
-								message: 'Uploading to GitHub...'
-							});
-							await updateMasterGist(
-								masterId.get() as string,
-								updatedProfile
-							);
+        const selected = await vscode.window.showQuickPick(options, {
+          placeHolder: "Choose an action",
+        });
+        if (selected) {
+          await vscode.commands.executeCommand(selected.command);
+        }
+      }
+    );
 
-							logger.info(
-								`Updated profile: ${selectedProfile.label}`
-							);
-							vscode.window.showInformationMessage(
-								`Profile "${selectedProfile.label}" updated successfully!`
-							);
-						}
-					);
-				} catch (error) {
-					logger.error(`Failed to update profile`, error);
-				}
-			}
-		);
+    const SetManualPath = vscode.commands.registerCommand(
+      "synceverything.setpathsmanually",
+      async () => {
+        const options = [
+          {
+            label: "$(settings) Set Settings Path",
+            type: "settings" as const,
+          },
+          {
+            label: "$(keyboard) Set Keybindings Path",
+            type: "keybindings" as const,
+          },
+        ];
 
-		const DeleteProfile = vscode.commands.registerCommand(
-			'synceverything.deleteprofile',
-			async () => {
-				try {
-					const masterGist = await getGist(masterId.get() as string);
-					const profileNames = Object.keys(masterGist.files);
+        const selected = await vscode.window.showQuickPick(options, {
+          placeHolder: "Choose configuration file to set",
+        });
 
-					if (profileNames.length === 0) {
-						vscode.window.showInformationMessage(
-							'No profiles found to delete'
-						);
-						return;
-					}
+        if (selected) {
+          try {
+            const path = await SyncEverything.setManualPath(
+              selected.type,
+              `Select ${selected.type}.json file`
+            );
+            ctx.globalState.update(`${selected.type}Path`, path);
+            logger.info(
+              `${selected.type} path updated to: ${path}`,
+              false,
+              "SetManualPath"
+            );
+            vscode.window.showInformationMessage(
+              `${selected.type} path updated successfully!`
+            );
+          } catch (error) {
+            logger.error(
+              `Failed to set ${selected?.type} path`,
+              "SetManualPath",
+              true,
+              error
+            );
+          }
+        }
+      }
+    );
 
-					const selectedProfile = await vscode.window.showQuickPick(
-						profileNames.map((name) => ({
-							label: name.replace('.json', ''),
-							description: `Delete profile: ${name.replace(
-								'.json',
-								''
-							)}`
-						})),
-						{ placeHolder: 'Select a profile to delete' }
-					);
+    const ShowLogs = vscode.commands.registerCommand(
+      "synceverything.showlogs",
+      () => {
+        logger.show();
+      }
+    );
 
-					if (!selectedProfile) {
-						return;
-					}
+    // Register all commands
+    ctx.subscriptions.push(
+      CreateProfile,
+      PullProfile,
+      UpdateProfile,
+      DeleteProfile,
+      SetManualPath,
+      ShowMenu,
+      ShowLogs,
+      statusBarItem,
+      logger
+    );
 
-					const confirmDelete =
-						await vscode.window.showWarningMessage(
-							`Are you sure you want to delete "${selectedProfile.label}"? This action cannot be undone.`,
-							'Delete',
-							'Cancel'
-						);
-
-					if (confirmDelete !== 'Delete') {
-						return;
-					}
-
-					await vscode.window.withProgress(
-						{
-							location: vscode.ProgressLocation.Notification,
-							title: `Deleting profile "${selectedProfile.label}"...`,
-							cancellable: false
-						},
-						async (progress) => {
-							const profileToDelete: IProfile = {
-								profileName: selectedProfile.label,
-								settings: '',
-								extensions: [],
-								keybindings: []
-							};
-
-							await deleteProfile(
-								masterId.get() as string,
-								profileToDelete
-							);
-							logger.info(
-								`Deleted profile: ${selectedProfile.label}`
-							);
-							vscode.window.showInformationMessage(
-								`Profile "${selectedProfile.label}" deleted successfully!`
-							);
-						}
-					);
-				} catch (error) {
-					logger.error(`Failed to delete profile`, error);
-				}
-			}
-		);
-
-		const ShowMenu = vscode.commands.registerCommand(
-			'synceverything.showmenu',
-			async () => {
-				const options = [
-					{
-						label: '$(plus) Create Profile',
-						command: 'synceverything.createprofile'
-					},
-					{
-						label: '$(cloud-download) Pull Profile',
-						command: 'synceverything.pullprofile'
-					},
-					{
-						label: '$(sync) Update Profile',
-						command: 'synceverything.updateprofile'
-					},
-					{
-						label: '$(trash) Delete Profile',
-						command: 'synceverything.deleteprofile'
-					},
-					{
-						label: '$(output) Show Logs',
-						command: 'synceverything.showlogs'
-					},
-					{
-						label: '$(file-symlink-directory) Set Paths Manually',
-						command: 'synceverything.setpathsmanually'
-					}
-				];
-
-				const selected = await vscode.window.showQuickPick(options, {
-					placeHolder: 'Choose an action'
-				});
-				if (selected) {
-					await vscode.commands.executeCommand(selected.command);
-				}
-			}
-		);
-
-		const SetManualPath = vscode.commands.registerCommand(
-			'synceverything.setpathsmanually',
-			async () => {
-				const options = [
-					{
-						label: '$(settings) Set Settings Path',
-						method: [setManualPath, settingsPath, 'settings']
-					},
-					{
-						label: '$(keyboard) Pull Profile',
-						method: [setManualPath, keybindingsPath, 'keybindings']
-					}
-				];
-
-				const selected = await vscode.window.showQuickPick(options, {
-					placeHolder: 'Choose an action'
-				});
-
-				if (selected) {
-					await setManualPath(
-						selected.method[1] as IContextStore<String>,
-						selected.method[2] as 'keybindings' | 'settings'
-					);
-				}
-			}
-		);
-
-		const ShowLogs = vscode.commands.registerCommand(
-			'synceverything.showlogs',
-			() => {
-				logger.show();
-			}
-		);
-
-		// Status bar setup
-		statusBarItem = vscode.window.createStatusBarItem(
-			vscode.StatusBarAlignment.Right,
-			100
-		);
-		statusBarItem.text = '$(sync~spin) Sync';
-		statusBarItem.tooltip = 'Sync Everything: Click to see profiles';
-		statusBarItem.command = 'synceverything.showmenu';
-		statusBarItem.show();
-
-		// Initialize the extension
-		const initialized = await initializeExtension();
-		if (!initialized) {
-			logger.error('Extension failed to initialize properly');
-			return;
-		}
-
-		// Register all commands
-		ctx.subscriptions.push(
-			CreateProfile,
-			PullProfile,
-			UpdateProfile,
-			DeleteProfile,
-			ShowMenu,
-			ShowLogs,
-			statusBarItem,
-			SetManualPath,
-			logger
-		);
-
-		vscode.window.showInformationMessage('Sync Everything is now active!');
-		logger.info('Extension activation completed successfully');
-	} catch (error) {
-		vscode.window.showErrorMessage(`${error}`);
-	}
+    logger.info("Extension activation completed successfully",false, "activate");
+  } catch (error) {
+    logger.error(`${error}`,"activate",false,error);
+  }
 }
 
-export function deactivate() {
-	logger?.info('Extension deactivated');
-	statusBarItem?.dispose();
-	logger?.dispose();
+export function deactivate(preserveLogger: boolean) {
+  logger?.info("Extension deactivated");
+  statusBarItem?.dispose();
+  if (!preserveLogger) {
+    logger?.dispose();
+  }
 }

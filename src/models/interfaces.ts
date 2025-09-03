@@ -1,3 +1,4 @@
+export type IGistCollection = IGist[]
 export interface IGist {
 	url: string;
 	forksUrl: string;
@@ -66,6 +67,12 @@ export interface IProfile {
 
 export interface ISettings {
 	[key: string]: any;
+}
+
+export interface IKeybinds{
+	key:string,
+	command:string,
+	when?:string
 }
 
 export interface IGistCreateRequest {
