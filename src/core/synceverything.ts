@@ -44,7 +44,7 @@ export default class SyncEverything {
           true
         );
         try {
-          const settingsPath = SyncEverything.setManualPath("settings");
+          const settingsPath = await SyncEverything.setManualPath("settings");
           context.globalState.update("settingsPath", settingsPath);
         } catch (error) {
           logger.error(
@@ -58,7 +58,7 @@ export default class SyncEverything {
     }
     if (!context.globalState.get("keybindingsPath")) {
       try {
-        const keybindingsPath = await findConfigFile(
+        const keybindingsPath:string = await findConfigFile(
           appName,
           "keybindings.json"
         );
@@ -70,7 +70,7 @@ export default class SyncEverything {
           true
         );
         try {
-          const keybindingsPath = SyncEverything.setManualPath("keybindings");
+          const keybindingsPath:string = await SyncEverything.setManualPath("keybindings");
           context.globalState.update("keybindingsPath", keybindingsPath);
         } catch (error) {
           logger.error(
@@ -128,7 +128,7 @@ export default class SyncEverything {
   private async readConfigFile<T>(
     t: "keybindings" | "settings"
   ): Promise<T | undefined> {
-    let path: string;
+    let path:string;
     try {
       path = this.context.globalState.get(`${t}Path`)!;
     } catch (error) {
