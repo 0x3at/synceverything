@@ -12,7 +12,6 @@ A powerful VS Code extension that enables seamless synchronization of your VS Co
     -   Installed Extensions
     -   Custom Keybindings
 -   🔍 **Smart Conflict Resolution**: Handles extension installation/uninstallation with confirmation
--   📊 **Progress Tracking**: Visual progress indicators for sync operations
 -   📝 **Detailed Logging**: Comprehensive logging for troubleshooting
 
 ## Requirements
@@ -62,9 +61,11 @@ Access all commands through the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`
 
 This extension contributes the following settings:
 
--   `synceverything.confirmBeforeSync`: Enable/disable confirmation before syncing extensions
--   ~~`synceverything.customSettingsPath`: Custom path for settings.json~~ **(Deprecated in beta 0.2)**
--   ~~`synceverything.customKeybindingsPath`: Custom path for keybindings.json~~ **(Deprecated in beta 0.2)**
+-   ~~`synceverything.confirmBeforeSync`: Enable/disable confirmation before syncing extensions~~ **(Removed in 0.3.0)**
+-   ~~`synceverything.customSettingsPath`: Custom path for settings.json~~ **(Removed in beta 0.2)**
+-   ~~`synceverything.customKeybindingsPath`: Custom path for keybindings.json~~ **(Removed in beta 0.2)**
+
+Currently, this extension does not contribute any configurable settings. All configuration is handled through the extension's UI commands.
 
 ## Known Issues
 
@@ -72,6 +73,14 @@ This extension contributes the following settings:
 
 ## Release Notes
 
+### 0.3.0 (Beta)
+
+-   **Configuration Changes**: Removed `synceverything.confirmBeforeSync` configuration setting
+-   **Core Improvements**: Major refactoring of GistService and Logger classes
+-   **Enhanced Error Handling**: Improved authentication logic
+-   **Code Quality**: Updated dependencies and cleaned up codebase
+-   **Better Path Handling**: Improved cross-platform path validation and file operations
+-   **Vscode Insiders**: Added automatic support for Vscode Insiders path identification
 ### 0.2.0 (Beta)
 
 -   Deprecated Manual Paths Settings as the interface for setting custom paths

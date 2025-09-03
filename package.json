@@ -2,7 +2,7 @@
 	"name": "sync-everything",
 	"displayName": "Sync Everything",
 	"description": "Sync your VS Code/Cursor settings, extensions, and keybindings across devices using GitHub Gists",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"qna": "marketplace",
 	"publisher": "DunderDev",
 	"icon": "./images/logo.png",
@@ -76,16 +76,6 @@
 				"icon": "$(file-symlink-directory)"
 			}
 		],
-		"configuration": {
-			"title": "Sync Everything",
-			"properties": {
-				"synceverything.confirmBeforeSync": {
-					"type": "boolean",
-					"default": true,
-					"description": "Show confirmation dialog before syncing"
-				}
-			}
-		},
 		"menus": {
 			"commandPalette": [
 				{
