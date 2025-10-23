@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.3.1] - 2025-10-23
+
+### Changed
+- Removed Animation in Status Bar Icon
+
 ## [0.3.0] - 2024-12-19
 
 ### Changed
